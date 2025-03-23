@@ -1,6 +1,6 @@
 <?php
 $host = 'localhost';
-$dbname = 'x_table';
+$dbname = 'table_booking';
 $username = 'root'; // Replace with your MySQL username
 $password = ''; // Replace with your MySQL password
 
