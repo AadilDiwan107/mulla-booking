@@ -11,30 +11,30 @@ if (!isset($_SESSION['admin_id'])) {
 // Handle form submission for adding a new menu item
 if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_POST['add_menu_item'])) {
     $name = $_POST['name'];
-    $description = $_POST['description'] ?? ''; // Default to empty string if not set
-    $price = $_POST['price'];
     $category = $_POST['category'];
+    $price = $_POST['price'];
+
+    // Handle image upload
+    $image_name = null;
+    if (isset($_FILES['image']) && $_FILES['image']['error'] === UPLOAD_ERR_OK) {
+        $upload_dir = 'uploads/';
+        if (!is_dir($upload_dir)) {
+            mkdir($upload_dir, 0777, true); // Create the uploads directory if it doesn't exist
+        }
+        $image_name = uniqid('menu_', true) . '_' . basename($_FILES['image']['name']); // Generate unique name
+        $image_path = $upload_dir . $image_name;
+
+        // Move the uploaded file to the uploads directory
+        if (!move_uploaded_file($_FILES['image']['tmp_name'], $image_path)) {
+            echo "<script>alert('Failed to upload image.');</script>";
+            exit;
+        }
+    }
 
     // Insert the new menu item into the database
-    $stmt = $pdo->prepare("INSERT INTO menu (name, description, price, category) VALUES (?, ?, ?, ?)");
-    $stmt->execute([$name, $description, $price, $category]);
-
+    $stmt = $pdo->prepare("INSERT INTO menu (name, category, price, image) VALUES (?, ?, ?, ?)");
+    $stmt->execute([$name, $category, $price, $image_name]);
     echo "<script>alert('Menu item added successfully!');</script>";
-}
-
-// Handle form submission for updating a menu item
-if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_POST['update_menu_item'])) {
-    $id = $_POST['id'];
-    $name = $_POST['name'];
-    $description = $_POST['description'] ?? ''; // Default to empty string if not set
-    $price = $_POST['price'];
-    $category = $_POST['category'];
-
-    // Update the menu item in the database
-    $stmt = $pdo->prepare("UPDATE menu SET name = ?, description = ?, price = ?, category = ? WHERE id = ?");
-    $stmt->execute([$name, $description, $price, $category, $id]);
-
-    echo "<script>alert('Menu item updated successfully!');</script>";
 }
 
 // Fetch all menu items from the database
@@ -53,8 +53,8 @@ $menu_items = $menu_stmt->fetchAll(PDO::FETCH_ASSOC);
 </head>
 
 <body>
-    <!-- Responsive Navbar -->
-    <nav class="navbar navbar-expand-lg navbar-dark bg-dark">
+     <!-- Responsive Navbar -->
+     <nav class="navbar navbar-expand-lg navbar-dark bg-dark">
         <div class="container-fluid">
             <!-- Brand Name -->
             <a class="navbar-brand" href="admin_dashboard.php">Hotel Table Booking</a>
@@ -88,28 +88,26 @@ $menu_items = $menu_stmt->fetchAll(PDO::FETCH_ASSOC);
 
         <!-- Add New Menu Item Form -->
         <h3 class="mb-3">Add New Menu Item</h3>
-        <form method="POST" class="w-50 mx-auto mb-5">
+        <form method="POST" enctype="multipart/form-data" class="w-50 mx-auto mb-5">
             <input type="hidden" name="add_menu_item" value="1">
             <div class="mb-3">
                 <label for="name" class="form-label">Name</label>
                 <input type="text" class="form-control" id="name" name="name" required>
             </div>
             <div class="mb-3">
-                <label for="description" class="form-label">Description</label>
-                <textarea class="form-control" id="description" name="description"></textarea>
+                <label for="category" class="form-label">Category</label>
+                <select class="form-select" id="category" name="category" required>
+                    <option value="Veg">Veg</option>
+                    <option value="Non-Veg">Non-Veg</option>
+                </select>
             </div>
             <div class="mb-3">
                 <label for="price" class="form-label">Price</label>
                 <input type="number" step="0.01" class="form-control" id="price" name="price" required>
             </div>
             <div class="mb-3">
-                <label for="category" class="form-label">Category</label>
-                <select class="form-select" id="category" name="category" required>
-                    <option value="Appetizers">Appetizers</option>
-                    <option value="Main Course">Main Course</option>
-                    <option value="Desserts">Desserts</option>
-                    <option value="Beverages">Beverages</option>
-                </select>
+                <label for="image" class="form-label">Image</label>
+                <input type="file" class="form-control" id="image" name="image" accept="image/*" required>
             </div>
             <button type="submit" class="btn btn-primary w-100">Add Menu Item</button>
         </form>
@@ -121,9 +119,9 @@ $menu_items = $menu_stmt->fetchAll(PDO::FETCH_ASSOC);
                 <tr>
                     <th>ID</th>
                     <th>Name</th>
-                    <th>Description</th>
-                    <th>Price</th>
                     <th>Category</th>
+                    <th>Price</th>
+                    <th>Image</th>
                     <th>Action</th>
                 </tr>
             </thead>
@@ -132,14 +130,19 @@ $menu_items = $menu_stmt->fetchAll(PDO::FETCH_ASSOC);
                     <tr>
                         <td><?= htmlspecialchars($item['id']) ?></td>
                         <td><?= htmlspecialchars($item['name']) ?></td>
-                        <td><?= htmlspecialchars($item['description'] ?? 'No description') ?></td>
-                        <td><?= htmlspecialchars($item['price']) ?></td>
                         <td><?= htmlspecialchars($item['category']) ?></td>
+                        <td><?= htmlspecialchars($item['price']) ?></td>
+                        <td>
+                            <?php if ($item['image']): ?>
+                                <img src="uploads/<?= htmlspecialchars($item['image']) ?>" alt="<?= htmlspecialchars($item['name']) ?>" width="50">
+                            <?php else: ?>
+                                No Image
+                            <?php endif; ?>
+                        </td>
                         <td>
                             <button class="btn btn-sm btn-warning" data-bs-toggle="modal" data-bs-target="#editModal<?= $item['id'] ?>">Edit</button>
                         </td>
                     </tr>
-
                     <!-- Edit Modal -->
                     <div class="modal fade" id="editModal<?= $item['id'] ?>" tabindex="-1" aria-labelledby="editModalLabel" aria-hidden="true">
                         <div class="modal-dialog">
@@ -148,7 +151,7 @@ $menu_items = $menu_stmt->fetchAll(PDO::FETCH_ASSOC);
                                     <h5 class="modal-title" id="editModalLabel">Edit Menu Item</h5>
                                     <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
                                 </div>
-                                <form method="POST">
+                                <form method="POST" enctype="multipart/form-data">
                                     <div class="modal-body">
                                         <input type="hidden" name="id" value="<?= htmlspecialchars($item['id']) ?>">
                                         <div class="mb-3">
@@ -156,21 +159,23 @@ $menu_items = $menu_stmt->fetchAll(PDO::FETCH_ASSOC);
                                             <input type="text" class="form-control" id="name" name="name" value="<?= htmlspecialchars($item['name']) ?>" required>
                                         </div>
                                         <div class="mb-3">
-                                            <label for="description" class="form-label">Description</label>
-                                            <textarea class="form-control" id="description" name="description"><?= htmlspecialchars($item['description'] ?? '') ?></textarea>
+                                            <label for="category" class="form-label">Category</label>
+                                            <select class="form-select" id="category" name="category" required>
+                                                <option value="Veg" <?= $item['category'] == 'Veg' ? 'selected' : '' ?>>Veg</option>
+                                                <option value="Non-Veg" <?= $item['category'] == 'Non-Veg' ? 'selected' : '' ?>>Non-Veg</option>
+                                            </select>
                                         </div>
                                         <div class="mb-3">
                                             <label for="price" class="form-label">Price</label>
                                             <input type="number" step="0.01" class="form-control" id="price" name="price" value="<?= htmlspecialchars($item['price']) ?>" required>
                                         </div>
                                         <div class="mb-3">
-                                            <label for="category" class="form-label">Category</label>
-                                            <select class="form-select" id="category" name="category" required>
-                                                <option value="Appetizers" <?= $item['category'] == 'Appetizers' ? 'selected' : '' ?>>Appetizers</option>
-                                                <option value="Main Course" <?= $item['category'] == 'Main Course' ? 'selected' : '' ?>>Main Course</option>
-                                                <option value="Desserts" <?= $item['category'] == 'Desserts' ? 'selected' : '' ?>>Desserts</option>
-                                                <option value="Beverages" <?= $item['category'] == 'Beverages' ? 'selected' : '' ?>>Beverages</option>
-                                            </select>
+                                            <label for="image" class="form-label">Image</label>
+                                            <input type="file" class="form-control" id="image" name="image" accept="image/*">
+                                            <?php if ($item['image']): ?>
+                                                <p><strong>Current Image:</strong></p>
+                                                <img src="uploads/<?= htmlspecialchars($item['image']) ?>" alt="<?= htmlspecialchars($item['name']) ?>" width="50">
+                                            <?php endif; ?>
                                         </div>
                                     </div>
                                     <div class="modal-footer">
